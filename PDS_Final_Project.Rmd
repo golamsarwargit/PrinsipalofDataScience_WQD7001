@@ -1,0 +1,190 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+# Load Libraries
+
+```{r}
+library(arules)
+library(arulesViz)
+library(tidyverse)
+library(readxl)
+library(knitr)
+library(ggplot2)
+library(lubridate)
+library(plyr)
+library(dplyr)
+library(RColorBrewer)
+```
+# Load Input file
+
+```{r}
+df_retail <- read_excel('D:/MY/UM/Semester 3/WQD7001 - Principal of Data Science/Final_Project/Online Retail.xlsx')
+```
+
+```{r}
+#head(df_retail)
+df_retail = df_retail[complete.cases(df_retail), ]
+head(df_retail)
+```
+
+```{r}
+df_retail %>% mutate(Description = as.factor(Description))
+df_retail %>% mutate(Country = as.factor(Country))
+
+# Feature Engineering
+df_retail$Date <- as.Date(df_retail$InvoiceDate)
+df_retail$TransTime<- format(df_retail$InvoiceDate,"%H:%M:%S")
+df_retail$InvoiceNo <- as.numeric(as.character(df_retail$InvoiceNo))
+```
+
+```{r}
+#cbind(df_retail,TransTime)
+glimpse(df_retail)
+```
+
+# Aggregate Data by invoice and Date
+
+```{r}
+
+df_transactionData <- ddply(df_retail,c("InvoiceNo","Date"),
+                       function(df1)paste(df1$Description,
+                       collapse = ","))
+head(df_transactionData)
+```
+
+# remove invoice and date column
+```{r}
+#set column InvoiceNo of dataframe transactionData  
+df_transactionData$InvoiceNo <- NULL
+
+#set column Date of dataframe transactionData
+df_transactionData$Date <- NULL
+
+#Rename column to items
+colnames(df_transactionData) <- c("items")
+
+#Show Dataframe transactionData
+df_transactionData
+```
+
+# Backup the basket information
+```{r}
+write.csv(df_transactionData,"D:/MY/UM/Semester 3/WQD7001 - Principal of Data Science/Final_Project/market_basket_transactions.csv", quote = FALSE, row.names = TRUE)
+```
+
+# Reading the basket data as transaction record
+
+```{r}
+tr <- read.transactions('D:/MY/UM/Semester 3/WQD7001 - Principal of Data Science/Final_Project/market_basket_transactions.csv', format = 'basket', sep=',')
+```
+
+```{r}
+summary(tr)
+```
+ 
+ 
+```{r}
+# Create an item frequency plot for the top 20 items
+#if (!require("RColorBrewer")) {
+  # install color package of R
+#install.packages("RColorBrewer")
+#include library RColorBrewer
+library(RColorBrewer)
+#}
+itemFrequencyPlot(tr,topN=20,type="absolute",col=brewer.pal(8,'Pastel2'), main="Absolute Item Frequency Plot")
+```
+ 
+```{r}
+itemFrequencyPlot(tr,topN=20,type="relative",col=brewer.pal(8,'Pastel2'), main="Relative Item Frequency Plot")
+```
+
+# Generate Rule
+
+```{r}
+# Min Support as 0.001, confidence as 0.8.
+association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.8,maxlen=2))
+```
+
+```{r}
+length(association.rules)
+summary(association.rules)
+```
+
+```{r}
+inspect(association.rules[1:10])
+```
+
+# Shorter Association Rule
+
+```{r}
+shorter.association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.8,maxlen=3))
+inspect(shorter.association.rules[1:10])
+```
+
+# Removing Subset of the rules
+```{r}
+subset.rules <- which(colSums(is.subset(shorter.association.rules, association.rules)) > 1) # get subset rules in vector
+length(subset.rules)  #> 3913
+```
+
+
+
+```{r}
+library(rje)
+A = c(1, 2, 3, 4)
+B = c(1, 2, 3, 4, 5)
+is.subset(B, A)
+```
+
+
+```{r}
+subset.association.rules. <- association.rules[-subset.rules] # remove subset rules.
+```
+
+
+# Find specefic item
+
+```{r}
+metal.association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.8),appearance = list(default="lhs",rhs="METAL"))
+inspect(head(metal.association.rules,10))
+```
+
+```{r}
+metal.association.rules <- apriori(tr, parameter = list(supp=0.001, conf=0.8),appearance = list(lhs="METAL",default="rhs"))
+inspect(head(metal.association.rules,10))
+```
+
+# Visualization
+
+```{r}
+subRules<-association.rules[quality(association.rules)$confidence>0.4]
+plotly_arules(subRules)
+```
+
+
+# Top 10 rules
+
+```{r}
+top10subRules <- head(subRules, n = 10, by = "confidence")
+plot(top10subRules, method = "graph",  engine = "htmlwidget")
+```
+
+
+```{r}
+#summary(subRules)
+print(association.rules)
+```
+
+
+```{r}
+install.packages('rcharts')
+#library (rcharts)
+#library(sihny)
+```
+
